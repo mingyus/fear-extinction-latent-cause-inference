@@ -1,30 +1,29 @@
-function simu_particle_filter(i_expList,update,pars,maxpost,N_particles,N_simu,ifPlot)
+function simu_particle_filter(i_expList,update,pars,maxpost,N_particles,N_simu)
 
-rng('shuffle');
-colors = [0,0,255; 61,121,4; 217,0,0]/255;
+rng(0);
 expname = {'sp','re'};
+if maxpost; maxpost_str = 'maxpost'; else; maxpost_str = 'nomaxpost'; end
 
 for i_exp = i_expList
     %% Free parameters
     if strcmp(update, 'RL')  % Recorla-Wagner learning
         
-        [alpha,slope,baserate,eta0t,eta1t,eta0s,eta1s,v0t,v0s] = deal(pars(1),pars(2),pars(3),pars(4),pars(5),pars(6),pars(7),pars(8),pars(9));
+        [alpha,A,slope,baserate,eta0t,eta1t,eta0s,eta1s,v0t,v0s,rep] = deal(pars(1),pars(2),pars(3),pars(4),pars(5),pars(6),pars(7),pars(8),pars(9),pars(10),pars(11));
         eta0 = [eta0t,eta0s]; eta1 = [eta1t,eta1s]; % learning rates
         v0 = [v0t,v0s]; % the probability of tone and shock for a new cause
         
-        filename = [update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
-            '_alpha' num2str(alpha) 'slope' num2str(slope) 'baserate' num2str(baserate)...
+        filename = [maxpost_str '_' update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
+            '_alpha' num2str(alpha) '_A' num2str(A) 'slope' num2str(slope) 'baserate' num2str(baserate)...
             'eta0t' num2str(eta0t) 'eta1t' num2str(eta1t) 'eta0s' num2str(eta0s) 'eta1s' num2str(eta1s)...
-            'v0t' num2str(v0t) 'v0s' num2str(v0s)...
-            '_' expname{i_exp}];
+            'v0t' num2str(v0t) 'v0s' num2str(v0s) '_' expname{i_exp}];
         
     elseif strcmp(update, 'inference')  % Bayesian inference of bernoulli probability with dirichlet prior (beta)
         
-        [alpha,slope,baserate,beta0t,beta1t,beta0s,beta1s] = deal(pars(1),pars(2),pars(3),pars(4),pars(5),pars(6),pars(7));
+        [alpha,A,slope,baserate,beta0t,beta1t,beta0s,beta1s,rep] = deal(pars(1),pars(2),pars(3),pars(4),pars(5),pars(6),pars(7),pars(8),pars(9));
         beta = [beta0t,beta1t; beta0s,beta1s];
         
-        filename = [update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
-            '_alpha' num2str(alpha) 'slope' num2str(slope) 'baserate' num2str(baserate)...
+        filename = [maxpost_str '_' update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
+            '_alpha' num2str(alpha) '_A' num2str(A) 'slope' num2str(slope) 'baserate' num2str(baserate)...
             'beta0t' num2str(beta0t) 'beta1t' num2str(beta1t) 'beta0s' num2str(beta0s) 'eta1s' num2str(beta1s)...
             '_' expname{i_exp}];
     end
@@ -86,15 +85,27 @@ for i_exp = i_expList
     
     %% Simulation
     
-    h = figure();
-    if ifPlot
-        h1 = figure('pos',[100 200 1200 400]);
-        h2 = figure();
-    end
-    
     % Features: tone(f_{t,1}) and shock(f_{t,2}); both take values 0 (absent) and 1 (present)
     N_features = 2;
     N_featurevalues = 2;
+    
+    predict_shock_all = zeros(N_simu, N_trials, N_exp_condition);
+    N_ce = N_trials_train + N_trials_extinction;
+    if i_exp == 1
+        N_re = 0;
+    else
+        N_re = N_trials_reinstatement;
+    end
+    p_one_cause_pre = zeros(N_exp_condition, N_ce);
+    p_two_causes1_pre = zeros(N_exp_condition, N_ce);
+    p_two_causes2_pre = zeros(N_exp_condition, N_ce);
+    p_one_cause_post = zeros(N_exp_condition, N_ce);
+    p_two_causes1_post = zeros(N_exp_condition, N_ce);
+    p_two_causes2_post = zeros(N_exp_condition, N_ce);
+    cause_assignment = zeros(N_exp_condition, N_ce+N_re);
+    p_cause = zeros(N_exp_condition, 3);
+    p_cause_lmtest = zeros(N_exp_condition, 3);
+    p_cause_reins = zeros(N_exp_condition);
     
     for i_exp_condition = 1:N_exp_condition
         
@@ -125,8 +136,6 @@ for i_exp = i_expList
         particle_set = zeros(1,N_particles);
         N_samples = N_particles;
         
-        predict_shock_all = zeros(N_simu,N_trials);
-        
         for i_simu = 1:N_simu
             
             % initialize weights, causes, observations, values/counts
@@ -149,7 +158,7 @@ for i_exp = i_expList
                 for i_particle = 1:N_particles
                     
                     % SAMPLE CAUSE: For each particle, sampling a hypothetical cluster assignment for the next observation from CRP
-                    [c(i_trial,i_particle),isnew] = rand_ddCRP(alpha,slope,baserate,c(1:i_trial-1,i_particle),N_causes(i_particle),t_trials(1:i_trial));
+                    [c(i_trial,i_particle),isnew] = rand_ddCRP(alpha,A,slope,baserate,c(1:i_trial-1,i_particle),N_causes(i_particle),t_trials(1:i_trial));
                     
                     if isnew
                         N_causes(i_particle) = N_causes(i_particle)+1;
@@ -196,17 +205,35 @@ for i_exp = i_expList
                 
                 % model predicetion per trial
                 predict_shock(i_trial) = sum(likelihood(1,:)./sum(likelihood(1,:),2).*predict(2,:));
+                predict_shock_baseline(i_trial) = mean(predict(2,:));
                 
-                if ifPlot
-                    figure(h1);
-                    % visualization of cause probabilities (prior)
-                    subplot(1,3,1);
-                    plot_pcause(c(i_trial,:));
-                    title('prior');
-                    % visualization of tone/shock probability associated with each cause, and the overall likelihood
-                    subplot(1,3,2);
-                    plot_likelihood(likelihood,c(i_trial,:),exp(logw));
-                    title('likelihood');
+                % record cause sequence probabilities for one-cause and two-cause (after cue)
+                p_one_cause_pre(i_exp_condition, i_trial) = mean(sum(c(1:i_trial,:) == 1, 1) == i_trial);
+                if i_trial <= N_trials_train
+                    p_two_causes1_pre(i_exp_condition, i_trial) = 0;
+                    p_two_causes2_pre(i_exp_condition, i_trial) = 0;
+                else
+                    idx_cause1 = ind_trials_train;
+                    idx_cause2 = (N_trials_train+1) : i_trial;
+                    p_two_causes1_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+                    
+                    idx_cause1 = intersect([ind_trials_train ind_shock{i_exp_condition}+N_trials_train], 1:i_trial);
+                    idx_cause2 = setdiff(1:i_trial, idx_cause1);
+                    p_two_causes2_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+                end
+                if i_trial == N_trials - 3 - 4 && i_exp == 1
+                    for i_cause = 1:3
+                        p_cause_lmtest(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
+                    end
+                end
+                if i_trial == N_trials - 3  % the first test trial
+                    cause_assignment(i_exp_condition, 1:i_trial-1) = c(1:i_trial-1,1);  % cause assignment for all trials before test
+                    for i_cause = 1:3
+                        p_cause(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
+                    end
+                    if i_exp == 2
+                        p_cause_reins(i_exp_condition) = mean(c(i_trial,:) == c(i_trial-1,:));
+                    end
                 end
                 
                 % RESAMPLING:
@@ -235,8 +262,25 @@ for i_exp = i_expList
                 
                 logw = zeros(1,N_particles); % re-initializing w after resampling
                 
+                % record cause sequence probabilities for one-cause and two-cause (end of trial)
+                p_one_cause_post(i_exp_condition, i_trial) = mean(sum(c(1:i_trial,:) == 1, 1) == i_trial);
+                if i_trial <= N_trials_train
+                    p_two_causes1_post(i_exp_condition, i_trial) = 0;
+                    p_two_causes2_post(i_exp_condition, i_trial) = 0;
+                else
+                    % conditioning: c1, extinction: c2
+                    idx_cause1 = ind_trials_train;
+                    idx_cause2 = (N_trials_train+1) : i_trial;
+                    p_two_causes1_post(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+                    
+                    % all shock trials: c1, all no-shock trials: c2
+                    idx_cause1 = intersect([ind_trials_train ind_shock{i_exp_condition}+N_trials_train], 1:i_trial);
+                    idx_cause2 = setdiff(1:i_trial, idx_cause1);
+                    p_two_causes2_post(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+                end
+                
                 % take the maximum of posterior (end of each session/day)
-                if (maxpost && interval_trials(i_trial) > 23)
+                if i_trial < N_trials && maxpost && interval_trials(i_trial) > 23
                     % find the cause sequence with the highest posterior
                     allcauseseq = unique(c(1:i_trial,:)','rows');
                     numcause = zeros(1,size(allcauseseq,1));
@@ -269,63 +313,69 @@ for i_exp = i_expList
                     end
                 end
                 
-                
-                if ifPlot
-                    % visualization of cause probabilities (posterior)
-                    subplot(1,3,3);
-                    plot_pcause(c(i_trial,:));
-                    title('posterior');
-                    sgtitle([session_name{i_trial} ': ' num2str(F(i_trial,2))],'FontSize',15);
-                    % visulization of posterior of cause sequence
-                    figure(h2);
-                    plot_pcauseseq(c(1:i_trial,:));
-                    pause();
-                end
-                
             end
             
             if i_exp == 2
                 predict_shock(28:29) = nan;
             end
-            predict_shock_all(i_simu,:) = predict_shock;
+            predict_shock_all(i_simu,:,i_exp_condition) = predict_shock;
+            predict_shock_all_baseline(i_simu,:,i_exp_condition) = predict_shock_baseline;
             
         end
         
         % plot the overall freeze-rate prediction curves
-        figure(h); hold on;
-        p(i_exp_condition) = plot(1:N_trials,mean(predict_shock_all,1),'-o','linewidth',1.5,'color',colors(i_exp_condition,:));
+        p_shock = mean(predict_shock_all(:,:,i_exp_condition),1);
+        p_freeze = func_pshock2freeze(p_shock);
+        if rep > 0
+            for i_trial = 2:N_trials
+                if interval_trials(i_trial - 1) < 23
+                    p_freeze(i_trial) = rep * p_freeze(i_trial-1) + (1-rep) * func_pshock2freeze(p_shock(i_trial));
+                end
+            end
+        end
         
     end
     
-    %% set format for freeze-rate prediction plot
-    figure(h);
-    ylim([0 1])
-    xlabel('Trial index')
-    ylabel('Estimated probability of shock')
-    set(gca,'fontsize',15)
-    colors = [0,0,255; 61,121,4; 217,0,0]/255;
-    if i_exp == 1
-        scatter([1:N_trials_train],0.05*ones(1,N_trials_train),[],colors(1,:),'filled');
-        scatter([1:N_trials_train N_trials_train+ind_shock{2}],0.1*ones(1,N_trials_train+length(ind_shock{2})),[],colors(2,:),'filled');
-        scatter([1:N_trials_train N_trials_train+ind_shock{3}],0.15*ones(1,N_trials_train+length(ind_shock{3})),[],colors(3,:),'filled');
-    else
-        ind_unsignaledShock = N_trials_train+N_trials_extinction+1:N_trials_train+N_trials_extinction+2;
-        scatter([1:N_trials_train ind_unsignaledShock],0.05*ones(1,N_trials_train+2),[],colors(1,:),'filled');
-        scatter([1:N_trials_train N_trials_train+ind_shock{2} ind_unsignaledShock],0.1*ones(1,N_trials_train+length(ind_shock{2})+2),[],colors(2,:),'filled');
-        scatter([1:N_trials_train N_trials_train+ind_shock{3} ind_unsignaledShock],0.15*ones(1,N_trials_train+length(ind_shock{3})+2),[],colors(3,:),'filled');
-    end
+    %% save simulation results
+    save(['results/' filename '.mat'], 'predict_shock_all', 'predict_shock_all_baseline', 'p_one_cause_pre', 'p_two_causes1_pre', 'p_two_causes2_pre', 'p_one_cause_post', 'p_two_causes1_post', 'p_two_causes2_post', 'cause_assignment', 'p_cause', 'p_cause_lmtest', 'p_cause_reins');
     
-    changeday = find(interval_trials>=24)+1;
-    for i = 1:numel(changeday)
-        line([changeday(i)-0.5 changeday(i)-0.5],[0,1],'color',[0.5 0.5 0.5]);
-    end
-    
-    legend(p,{'standard extinction','gradual extinction','gradual reverse'})
-    legend boxoff;
-    
-    print(['figure/' filename '.png'],'-dpng');
 end
 end
+
+
+function [c,isnew,pmf] = rand_ddCRP(alpha,A,slope,baserate,c_old,N_causes,t)
+
+if isempty(c_old)
+    c = 1; isnew = 1; pmf = 1;
+    return;
+end
+
+% current time point
+t_current = t(end);
+% previous time points
+t_old = t(1:end-1);
+
+% probability for each cause
+pmf = zeros(1,N_causes+1);
+for i_cause = 1:N_causes
+    deltat = t_current - t_old(c_old==i_cause);
+    pmf(i_cause) = A*sum(exp(-slope*deltat)) + baserate;
+end
+pmf(end) = alpha; % new cause
+pmf = pmf/sum(pmf); % normalization
+
+% sample
+cmf = cumsum(pmf);
+c = find(rand()<=cmf,1,'first');
+
+if c > N_causes
+    isnew = 1;
+else
+    isnew = 0;
+end
+
+end
+
 
 function s = logsumexp(X, dim)
 % Compute log(sum(exp(X),dim)) while avoiding numerical underflow.
@@ -343,64 +393,4 @@ i = isinf(y);
 if any(i(:))
     s(i) = y(i);
 end
-end
-
-function plot_pcause(c)
-[n_c,~] = histcounts(c,0.5:1:max(c+0.5));
-bar(1:max(c),n_c/sum(n_c),'FaceColor',[0.5 0.5 0.5],'BarWidth',0.5);
-xlim([0.5 max(c+0.5)]); ylim([0 1]);
-set(gca,'ytick',0:0.1:1);
-xlabel('Cause'); ylabel('Probability');
-set(gca,'FontSize',15);
-end
-
-function plot_likelihood(likelihood,c,w)
-p_tone = zeros(1,max(c)); p_shock = zeros(1,max(c)); p_both = zeros(1,max(c));
-for i_cause = 1:max(c)
-    if isempty((c==i_cause))
-        p_tone(i_cause) = nan;
-        p_shock(i_cause) = nan;
-        p_both(i_cause) = nan;
-    else
-        p_tone(i_cause) = mean(likelihood(1,c==i_cause));
-        p_shock(i_cause) = mean(likelihood(2,c==i_cause));
-        p_both(i_cause) = mean(w(c==i_cause));
-    end
-end
-if max(c) == 1
-    bar(1:max(c)+1,[p_tone,p_shock,p_both;nan,nan,nan]); set(gca,'xtick',1);
-else
-    bar(1:max(c),[p_tone;p_shock;p_both]');
-end
-xlim([0.5 max(c+0.5)]); ylim([0 1]);
-xlabel('Cause'); ylabel('Probability');
-set(gca,'FontSize',15);
-end
-
-function plot_pcauseseq(c)
-clf; hold on;
-N_particles = size(c,2);
-allcauseseq = unique(c','rows');
-numcause = zeros(1,size(allcauseseq,1));
-legend_text = cell(1,size(allcauseseq,1));
-i = 0;
-for icause = 1:size(allcauseseq,1)
-    for i_particle = 1:N_particles
-        if sum(allcauseseq(icause,:) ~= c(:,i_particle)')==0
-            numcause(icause) = numcause(icause) + 1;
-        end
-    end
-    if numcause(icause) > N_particles/100
-        i = i+1;
-        bar(i,numcause(icause),'FaceColor',[0.5 0.5 0.5],'BarWidth',0.5);
-        legend_text{i} = [num2str(i) ': ' num2str(allcauseseq(icause,:))];
-    end
-end
-if i > 0
-    xlim([0.5 i+0.5]); ylim([0 N_particles]);
-    set(gca,'ytick',0:N_particles/10:N_particles,'yticklabel',0:0.1:1,'xtick',1:i);
-    legend(legend_text(1:i));
-end
-xlabel('Cause sequence'); ylabel('Probability');
-set(gca,'FontSize',15);
 end
