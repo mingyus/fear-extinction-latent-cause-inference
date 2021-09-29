@@ -16,9 +16,9 @@ for iExp = 1:2
     % experiment
     switch iExp
         case 1
-            data = xlsread('handscores/FreqExtinction_Handscores_CEJ.xlsx');
+            data = xlsread('handscores/gershman2013_experiment1.xlsx');
         case 2
-            data = xlsread('handscores/Reinstatement_FreqExt_Handscores.xlsx');
+            data = xlsread('handscores/gershman2013_experiment2.xlsx');
     end
     
     % model simulation

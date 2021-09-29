@@ -3,8 +3,8 @@ This repository contains data and code that accompany the manuscript entitled "E
 **Table of Contents**
 
 * `handscores/` contains the data reported in Gershman et al. (2013)
-	* `FreqExtinction_Handscores_CEJ.xlsx`: Experiment 1 (spontaneous recovery)
-	* `Reinstatement_FreqExt_Handscores.xlsx`: Experiment 2 (reinstatement)
+	* `gershman2013_experiment1.xlsx`: Experiment 1 (spontaneous recovery)
+	* `gershman2013_experiment2.xlsx`: Experiment 2 (reinstatement)
 * `*.m` files: code for model simulation and plotting figures (see details below)
 * `results/` contains the model simulation results; can be reproduced with `simu_particle_filter.m`; used for generating figures in the manuscript.
 * `stats.ipynb`: statistical test results
