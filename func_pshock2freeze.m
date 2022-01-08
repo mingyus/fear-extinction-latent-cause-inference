@@ -1,4 +1,7 @@
-function freeze = func_pshock2freeze(pshock)
+function freeze = func_pshock2freeze(pshock, p0)
+if nargin < 2
+    p0 = 0.2;
+end
 % linear with offset
-freeze = pshock*0.8+0.2;
+freeze = pshock*(1-p0)+p0;
 end

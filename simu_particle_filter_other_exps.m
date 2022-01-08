@@ -1,4 +1,4 @@
-function simu_particle_filter(i_expList,update,pars,maxpost,N_particles,N_simu)
+function simu_particle_filter_other_exps(simuname, i_expList, update, pars, maxpost, N_particles, N_simu)
 
 rng(0);
 expname = {'sp','re'};
@@ -15,7 +15,7 @@ for i_exp = i_expList
         filename = [maxpost_str '_' update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
             '_alpha' num2str(alpha) '_A' num2str(A) 'slope' num2str(slope) 'baserate' num2str(baserate)...
             'eta0t' num2str(eta0t) 'eta1t' num2str(eta1t) 'eta0s' num2str(eta0s) 'eta1s' num2str(eta1s)...
-            'v0t' num2str(v0t) 'v0s' num2str(v0s) '_' expname{i_exp}];
+            'v0t' num2str(v0t) 'v0s' num2str(v0s) '_' simuname];
         
     elseif strcmp(update, 'inference')  % Bayesian inference of bernoulli probability with dirichlet prior (beta)
         
@@ -25,20 +25,46 @@ for i_exp = i_expList
         filename = [maxpost_str '_' update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
             '_alpha' num2str(alpha) '_A' num2str(A) 'slope' num2str(slope) 'baserate' num2str(baserate)...
             'beta0t' num2str(beta0t) 'beta1t' num2str(beta1t) 'beta0s' num2str(beta0s) 'eta1s' num2str(beta1s)...
-            '_' expname{i_exp}];
+            '_' simuname];
+    end
+    
+    if i_exp < 3
+        filename = [filename '_' expname{i_exp}];
     end
     
     %% Trial information: number of trials, trial indices, and timing information
     
-    N_exp_condition = 3;
-    ind_shock = {[],[1,3,6,10,15],[1,6,10,13,15]};  % standard extinction, gradual extinction, gradual reverse
+    % trial number, shock index, trial index
+    switch simuname
+        case 'occasional_reinforcement'
+            N_exp_condition = 2;
+            ind_shock = cell(1,N_exp_condition);
+            for i_exp_condition = 1:N_exp_condition
+                ind_shock(i_exp_condition) = {randsample(15, 5)'};
+            end
+            N_trials_train = 3;
+            N_trials_extinction = 24;
+            
+        case 'multiple_sessions'
+            N_exp_condition = 2;
+            for i_exp_condition = 1:N_exp_condition
+                ind_shock{i_exp_condition} = [];
+            end
+            N_trials_train = 3;
+            N_trials_extinction = 9;
+            N_sessions = 3;
+            
+        case 'low_intensity'
+            N_exp_condition = 3;
+            ind_shock = {[],[1,3,6,10,15],[1,6,10,13,15]};  % standard extinction, gradual extinction, gradual reverse
+            N_trials_train = 3;
+            N_trials_extinction = 24;
+    end
     
     switch i_exp
         case 1 % spontaneous recovery
             
-            % Procedure: conditioning (3 trials), 24h, extinction (24 trials), 24h, long term memory test (4 trials), 30d, spontaneous recovery test (4 trials)
-            N_trials_train = 3;
-            N_trials_extinction = 24;
+            % Procedure: conditioning, 24h, extinction, 24h, long term memory test, 30d, spontaneous recovery test
             N_trials_lmtest = 4;
             N_trials_srtest = 4;
             N_trials = N_trials_train + N_trials_extinction + N_trials_lmtest + N_trials_srtest;
@@ -46,23 +72,10 @@ for i_exp = i_expList
             ind_trials_extinction = (ind_trials_train(end)+1):(ind_trials_train(end)+N_trials_extinction);
             ind_trials_lmtest = (ind_trials_extinction(end)+1):(ind_trials_extinction(end)+N_trials_lmtest);
             ind_trials_srtest = (ind_trials_lmtest(end)+1):(ind_trials_lmtest(end)+N_trials_srtest);
-            session_name = cell(1,N_trials);
-            session_name(ind_trials_train) = {'train'};
-            session_name(ind_trials_extinction) = {'extinction'};
-            session_name(ind_trials_lmtest) = {'long-term memory test'};
-            session_name(ind_trials_srtest) = {'spontaneous recovery test'};
-            
-            t_tone = 20;
-            ITI = 160;
-            interval_trials = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
-                24*3600, (t_tone+ITI)*ones(1,N_trials_lmtest-1), 30*24*3600, (t_tone+ITI)*ones(1,N_trials_srtest-1)]/3600;
-            t_trials = [0, cumsum(interval_trials)];
             
         case 2 % reinstatement
             
-            % Procedure: conditioning (3 trials), 24h, extinction (24 trials), 24h, 2 unsignaled shocks, 24h, test (4 trials)
-            N_trials_train = 3;
-            N_trials_extinction = 24;
+            % Procedure: conditioning, 24h, extinction, 24h, reinstatement (unsignaled shocks), 24h, test
             N_trials_reinstatement = 2;
             N_trials_lmtest = 4;
             N_trials = N_trials_train + N_trials_extinction + N_trials_reinstatement + N_trials_lmtest;
@@ -70,18 +83,43 @@ for i_exp = i_expList
             ind_trials_extinction = (ind_trials_train(end)+1):(ind_trials_train(end)+N_trials_extinction);
             ind_trials_reinstatement = (ind_trials_extinction(end)+1):(ind_trials_extinction(end)+N_trials_reinstatement);
             ind_trials_lmtest = (ind_trials_reinstatement(end)+1):(ind_trials_reinstatement(end)+N_trials_lmtest);
-            session_name(ind_trials_train) = {'train'};
-            session_name(ind_trials_extinction) = {'extinction'};
-            session_name(ind_trials_reinstatement) = {'reinstatement'};
-            session_name(ind_trials_lmtest) = {'test'};
             
-            t_tone = 20;
-            ITI = 160;
-            interval_trials = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
-                24*3600, (t_tone+ITI)*ones(1,N_trials_reinstatement-1), 24*3600, (t_tone+ITI)*ones(1,N_trials_lmtest-1)]/3600;
-            t_trials = [0, cumsum(interval_trials)];
+        case 3 % no test
             
+            N_trials = N_trials_train + N_trials_extinction;
+            ind_trials_train = 1:N_trials_train;
+            ind_trials_extinction = (ind_trials_train(end)+1):(ind_trials_train(end)+N_trials_extinction);
     end
+    
+    % timing
+    t_tone = 20;
+    ITI = 160;
+    
+    % conditioning + extinction
+    switch simuname
+        case 'multiple_sessions'
+            % one session
+            interval_trials{1} = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), 24*3600];
+            % multiple sessions
+            interval_trials{2} = [t_tone+ITI, t_tone+(ITI+40), 24*3600, repmat([(t_tone+ITI)*ones(1,N_trials_extinction/N_sessions-1), 24*3600], 1, N_sessions)];
+        otherwise
+            for i_exp_condition = 1:N_exp_condition
+                interval_trials{i_exp_condition} = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), 24*3600];
+            end
+    end
+    
+    
+    for i_exp_condition = 1:N_exp_condition
+        % test
+        switch i_exp
+            case 1
+                interval_trials{i_exp_condition} = [interval_trials{i_exp_condition}, (t_tone+ITI)*ones(1,N_trials_lmtest-1), 30*24*3600, (t_tone+ITI)*ones(1,N_trials_srtest-1)]/3600;
+            case 2
+                interval_trials{i_exp_condition} = [interval_trials{i_exp_condition}, (t_tone+ITI)*ones(1,N_trials_reinstatement-1), 24*3600, (t_tone+ITI)*ones(1,N_trials_lmtest-1)]/3600;
+        end
+        t_trials{i_exp_condition} = [0, cumsum(interval_trials{i_exp_condition})];
+    end
+    
     
     %% Simulation
     
@@ -91,10 +129,10 @@ for i_exp = i_expList
     
     predict_shock_all = zeros(N_simu, N_trials, N_exp_condition);
     N_ce = N_trials_train + N_trials_extinction;
-    if i_exp == 1
-        N_re = 0;
-    else
+    if i_exp == 2
         N_re = N_trials_reinstatement;
+    else
+        N_re = 0;
     end
     p_one_cause_pre = zeros(N_exp_condition, N_ce);
     p_two_causes1_pre = zeros(N_exp_condition, N_ce);
@@ -120,10 +158,17 @@ for i_exp = i_expList
         end
         % set reinstatement trials: all w/o tone, all w/ shock (only exp2)
         if i_exp == 2
-            F(ind_trials_reinstatement,1) = 0; F(ind_trials_reinstatement,2) = 1;
+            F(ind_trials_reinstatement,1) = 0; 
+            if strcmp(simuname, 'low_intensity')
+                F(ind_trials_reinstatement,2) = 0;
+            else
+                F(ind_trials_reinstatement,2) = 1;
+            end
         end
         % set test trials: all w/ tone, all w/o shock
-        F(ind_trials_lmtest,1) = 1; F(ind_trials_lmtest,2) = 0;
+        if i_exp < 3
+            F(ind_trials_lmtest,1) = 1; F(ind_trials_lmtest,2) = 0;
+        end
         % set spontaneous recovery trials: all w/ tone, all w/o shock
         if i_exp == 1
             F(ind_trials_srtest,1) = 1; F(ind_trials_srtest,2) = 0;
@@ -155,7 +200,7 @@ for i_exp = i_expList
                 for i_particle = 1:N_particles
                     
                     % SAMPLE CAUSE: For each particle, sampling a hypothetical cluster assignment for the next observation from CRP
-                    [c(i_trial,i_particle),isnew] = rand_ddCRP(alpha,A,slope,baserate,c(1:i_trial-1,i_particle),N_causes(i_particle),t_trials(1:i_trial));
+                    [c(i_trial,i_particle),isnew] = rand_ddCRP(alpha,A,slope,baserate,c(1:i_trial-1,i_particle),N_causes(i_particle),t_trials{i_exp_condition}(1:i_trial));
                     
                     if isnew
                         N_causes(i_particle) = N_causes(i_particle)+1;
@@ -225,7 +270,7 @@ for i_exp = i_expList
                         p_cause_lmtest(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
                     end
                 end
-                if i_trial == N_trials - 3  % the first test trial
+                if i_trial == N_trials - 3 && i_exp < 3  % the first test trial
                     cause_assignment(i_exp_condition, 1:i_trial-1) = c(1:i_trial-1,1);  % cause assignment for all trials before test
                     for i_cause = 1:3
                         p_cause(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
@@ -279,7 +324,7 @@ for i_exp = i_expList
                 end
                 
                 % take the maximum of posterior (end of each session/day)
-                if i_trial < N_trials && maxpost && interval_trials(i_trial) > 23
+                if i_trial < N_trials && maxpost && interval_trials{i_exp_condition}(i_trial) > 23
                     % find the cause sequence with the highest posterior
                     allcauseseq = unique(c(1:i_trial,:)','rows');
                     numcause = zeros(1,size(allcauseseq,1));
@@ -315,7 +360,7 @@ for i_exp = i_expList
             end
             
             if i_exp == 2
-                predict_shock(28:29) = nan;
+                predict_shock(N_trials_train+N_trials_extinction+1:N_trials_train+N_trials_extinction+2) = nan;
             end
             predict_shock_all(i_simu,:,i_exp_condition) = predict_shock;
             predict_shock_all_baseline(i_simu,:,i_exp_condition) = predict_shock_baseline;
@@ -327,7 +372,7 @@ for i_exp = i_expList
         p_freeze = func_pshock2freeze(p_shock);
         if rep > 0
             for i_trial = 2:N_trials
-                if interval_trials(i_trial - 1) < 23
+                if interval_trials{i_exp_condition}(i_trial - 1) < 23
                     p_freeze(i_trial) = rep * p_freeze(i_trial-1) + (1-rep) * func_pshock2freeze(p_shock(i_trial));
                 end
             end

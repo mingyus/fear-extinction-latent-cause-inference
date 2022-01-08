@@ -1,4 +1,4 @@
-function simu_particle_filter(i_expList,update,pars,maxpost,N_particles,N_simu)
+function simu_particle_filter_continuous(i_expList,update,pars,maxpost,N_particles,N_simu)
 
 rng(0);
 expname = {'sp','re'};
@@ -15,7 +15,16 @@ for i_exp = i_expList
         filename = [maxpost_str '_' update '_Nparticles' num2str(N_particles) '_Nsimu' num2str(N_simu)...
             '_alpha' num2str(alpha) '_A' num2str(A) 'slope' num2str(slope) 'baserate' num2str(baserate)...
             'eta0t' num2str(eta0t) 'eta1t' num2str(eta1t) 'eta0s' num2str(eta0s) 'eta1s' num2str(eta1s)...
-            'v0t' num2str(v0t) 'v0s' num2str(v0s) '_' expname{i_exp}];
+            'v0t' num2str(v0t) 'v0s' num2str(v0s)];
+        
+        % binary vs continuous shock
+        if length(pars) > 11
+            sigma = pars(12);
+            filename = [filename 'sigma' num2str(sigma) '_' expname{i_exp}];
+        else
+            sigma = nan;
+            filename = [filename '_' expname{i_exp}];
+        end
         
     elseif strcmp(update, 'inference')  % Bayesian inference of bernoulli probability with dirichlet prior (beta)
         
@@ -30,15 +39,13 @@ for i_exp = i_expList
     
     %% Trial information: number of trials, trial indices, and timing information
     
-    N_exp_condition = 3;
-    ind_shock = {[],[1,3,6,10,15],[1,6,10,13,15]};  % standard extinction, gradual extinction, gradual reverse
+    N_trials_train = 3;
+    N_trials_extinction = 26;
     
     switch i_exp
         case 1 % spontaneous recovery
             
-            % Procedure: conditioning (3 trials), 24h, extinction (24 trials), 24h, long term memory test (4 trials), 30d, spontaneous recovery test (4 trials)
-            N_trials_train = 3;
-            N_trials_extinction = 24;
+            % Procedure: conditioning, 24h, extinction, 24h, long term memory test, 30d, spontaneous recovery test
             N_trials_lmtest = 4;
             N_trials_srtest = 4;
             N_trials = N_trials_train + N_trials_extinction + N_trials_lmtest + N_trials_srtest;
@@ -54,15 +61,13 @@ for i_exp = i_expList
             
             t_tone = 20;
             ITI = 160;
-            interval_trials = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
+            interval_trials = [(t_tone+ITI)*ones(1, N_trials_train - 1), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
                 24*3600, (t_tone+ITI)*ones(1,N_trials_lmtest-1), 30*24*3600, (t_tone+ITI)*ones(1,N_trials_srtest-1)]/3600;
             t_trials = [0, cumsum(interval_trials)];
             
         case 2 % reinstatement
             
-            % Procedure: conditioning (3 trials), 24h, extinction (24 trials), 24h, 2 unsignaled shocks, 24h, test (4 trials)
-            N_trials_train = 3;
-            N_trials_extinction = 24;
+            % Procedure: conditioning, 24h, extinction, 24h, reinstatement (unsignaled shocks), 24h, test
             N_trials_reinstatement = 2;
             N_trials_lmtest = 4;
             N_trials = N_trials_train + N_trials_extinction + N_trials_reinstatement + N_trials_lmtest;
@@ -77,11 +82,28 @@ for i_exp = i_expList
             
             t_tone = 20;
             ITI = 160;
-            interval_trials = [t_tone+ITI, t_tone+(ITI+40), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
+            interval_trials = [(t_tone+ITI)*ones(1, N_trials_train - 1), 24*3600, (t_tone+ITI)*ones(1,N_trials_extinction-1), ...
                 24*3600, (t_tone+ITI)*ones(1,N_trials_reinstatement-1), 24*3600, (t_tone+ITI)*ones(1,N_trials_lmtest-1)]/3600;
             t_trials = [0, cumsum(interval_trials)];
             
     end
+    
+    % standard extinction, deconditioning, reduced intensity
+%     shocks = {
+%         zeros(1,N_trials_extinction),
+%         [-(0:N_trials_extinction/2-1)/(N_trials_extinction/2) + 1, zeros(1,N_trials_extinction/2)],
+%         [exp(-(0:N_trials_extinction/2-1) / (N_trials_extinction/4)), zeros(1,N_trials_extinction/2)]
+%     };
+%     shocks{4} = [shocks{2}(1:N_trials_extinction/2) + shocks{2}(N_trials_extinction/2:-1:1) - shocks{3}(N_trials_extinction/2:-1:1), zeros(1,N_trials_extinction/2)];
+    
+    shocks = {
+        zeros(1,N_trials_extinction),
+        [-(0:7-1)/7 + 1, zeros(1,13+6)],
+        [-(0:10-1)/10 + 1, zeros(1,10+6)],
+        [-(0:13-1)/13 + 1, zeros(1,7+6)],
+    };
+    
+    N_exp_condition = length(shocks);
     
     %% Simulation
     
@@ -96,16 +118,16 @@ for i_exp = i_expList
     else
         N_re = N_trials_reinstatement;
     end
-    p_one_cause_pre = zeros(N_exp_condition, N_ce);
-    p_two_causes1_pre = zeros(N_exp_condition, N_ce);
-    p_two_causes2_pre = zeros(N_exp_condition, N_ce);
+%     p_one_cause_pre = zeros(N_exp_condition, N_ce);
+%     p_two_causes1_pre = zeros(N_exp_condition, N_ce);
+%     p_two_causes2_pre = zeros(N_exp_condition, N_ce);
     p_one_cause_post = zeros(N_exp_condition, N_ce);
-    p_two_causes1_post = zeros(N_exp_condition, N_ce);
-    p_two_causes2_post = zeros(N_exp_condition, N_ce);
+    p_two_causes_post = zeros(N_exp_condition, N_ce);
+%     p_two_causes2_post = zeros(N_exp_condition, N_ce);
     cause_assignment = zeros(N_exp_condition, N_ce+N_re);
-    p_cause = zeros(N_exp_condition, 3);
-    p_cause_lmtest = zeros(N_exp_condition, 3);
-    p_cause_reins = zeros(N_exp_condition);
+%     p_cause = zeros(N_exp_condition, 3);
+%     p_cause_lmtest = zeros(N_exp_condition, 3);
+%     p_cause_reins = zeros(N_exp_condition);
     
     for i_exp_condition = 1:N_exp_condition
         
@@ -115,9 +137,7 @@ for i_exp = i_expList
         F(ind_trials_train,1) = 1; F(ind_trials_train,2) = 1;
         % set extinction trials: all w/ tone, some w/ shock
         F(ind_trials_extinction,1) = 1;
-        if ~isempty(ind_shock{i_exp_condition})
-            F(ind_trials_extinction(ind_shock{i_exp_condition}),2) = 1;
-        end
+        F(ind_trials_extinction,2) = shocks{i_exp_condition};
         % set reinstatement trials: all w/o tone, all w/ shock (only exp2)
         if i_exp == 2
             F(ind_trials_reinstatement,1) = 0; F(ind_trials_reinstatement,2) = 1;
@@ -182,12 +202,17 @@ for i_exp = i_expList
                             pfeature = counts(i_feature,2,c(i_trial,i_particle),i_particle) / counts_total(i_feature,c(i_trial,i_particle),i_particle);
                         end
                         
-                        likelihood(i_feature,i_particle) = pfeature * (F(i_trial,i_feature)==1) + (1-pfeature) * (F(i_trial,i_feature)==0);
-                        logw(i_particle) = logw(i_particle) + log(likelihood(i_feature,i_particle));
+                        if ~isnan(sigma) && i_feature == 2  % only for continuous shocks
+                            likelihood(i_feature,i_particle) = normpdf(F(i_trial,i_feature), pfeature, sigma);
+                        else
+                            likelihood(i_feature,i_particle) = pfeature * (F(i_trial,i_feature)==1) + (1-pfeature) * (F(i_trial,i_feature)==0);
+                        end
                         
                         if i_feature == 2  % record prediction for shock
                             predict(i_particle) = pfeature;
                         end
+                        
+                        logw(i_particle) = logw(i_particle) + log(likelihood(i_feature,i_particle));                       
                         
                         % RL update
                         if strcmp(update, 'RL')
@@ -206,33 +231,33 @@ for i_exp = i_expList
                 predict_shock(i_trial) = sum(likelihood(1,:)./sum(likelihood(1,:),2).*predict);
                 predict_shock_baseline(i_trial) = mean(predict);
                 
-                % record cause sequence probabilities for one-cause and two-cause (after cue)
-                p_one_cause_pre(i_exp_condition, i_trial) = mean(sum(c(1:i_trial,:) == 1, 1) == i_trial);
-                if i_trial <= N_trials_train
-                    p_two_causes1_pre(i_exp_condition, i_trial) = 0;
-                    p_two_causes2_pre(i_exp_condition, i_trial) = 0;
-                else
-                    idx_cause1 = ind_trials_train;
-                    idx_cause2 = (N_trials_train+1) : i_trial;
-                    p_two_causes1_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
-                    
-                    idx_cause1 = intersect([ind_trials_train ind_shock{i_exp_condition}+N_trials_train], 1:i_trial);
-                    idx_cause2 = setdiff(1:i_trial, idx_cause1);
-                    p_two_causes2_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
-                end
-                if i_trial == N_trials - 3 - 4 && i_exp == 1
-                    for i_cause = 1:3
-                        p_cause_lmtest(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
-                    end
-                end
+%                 % record cause sequence probabilities for one-cause and two-cause (after cue)
+%                 p_one_cause_pre(i_exp_condition, i_trial) = mean(sum(c(1:i_trial,:) == 1, 1) == i_trial);
+%                 if i_trial <= N_trials_train
+%                     p_two_causes1_pre(i_exp_condition, i_trial) = 0;
+%                     p_two_causes2_pre(i_exp_condition, i_trial) = 0;
+%                 else
+%                     idx_cause1 = ind_trials_train;
+%                     idx_cause2 = (N_trials_train+1) : i_trial;
+%                     p_two_causes1_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+%                     
+%                     idx_cause1 = intersect([ind_trials_train ind_shock{i_exp_condition}+N_trials_train], 1:i_trial);
+%                     idx_cause2 = setdiff(1:i_trial, idx_cause1);
+%                     p_two_causes2_pre(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+%                 end
+%                 if i_trial == N_trials - 3 - 4 && i_exp == 1
+%                     for i_cause = 1:3
+%                         p_cause_lmtest(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
+%                     end
+%                 end
                 if i_trial == N_trials - 3  % the first test trial
                     cause_assignment(i_exp_condition, 1:i_trial-1) = c(1:i_trial-1,1);  % cause assignment for all trials before test
-                    for i_cause = 1:3
-                        p_cause(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
-                    end
-                    if i_exp == 2
-                        p_cause_reins(i_exp_condition) = mean(c(i_trial,:) == c(i_trial-1,:));
-                    end
+%                     for i_cause = 1:3
+%                         p_cause(i_exp_condition, i_cause) = mean(c(i_trial,:) == i_cause);
+%                     end
+%                     if i_exp == 2
+%                         p_cause_reins(i_exp_condition) = mean(c(i_trial,:) == c(i_trial-1,:));
+%                     end
                 end
                 
                 % RESAMPLING:
@@ -264,18 +289,12 @@ for i_exp = i_expList
                 % record cause sequence probabilities for one-cause and two-cause (end of trial)
                 p_one_cause_post(i_exp_condition, i_trial) = mean(sum(c(1:i_trial,:) == 1, 1) == i_trial);
                 if i_trial <= N_trials_train
-                    p_two_causes1_post(i_exp_condition, i_trial) = 0;
-                    p_two_causes2_post(i_exp_condition, i_trial) = 0;
+                    p_two_causes_post(i_exp_condition, i_trial) = 0;
                 else
                     % conditioning: c1, extinction: c2
                     idx_cause1 = ind_trials_train;
                     idx_cause2 = (N_trials_train+1) : i_trial;
-                    p_two_causes1_post(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
-                    
-                    % all shock trials: c1, all no-shock trials: c2
-                    idx_cause1 = intersect([ind_trials_train ind_shock{i_exp_condition}+N_trials_train], 1:i_trial);
-                    idx_cause2 = setdiff(1:i_trial, idx_cause1);
-                    p_two_causes2_post(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
+                    p_two_causes_post(i_exp_condition, i_trial) = mean(sum(c(idx_cause1,:) == 1,1)==length(idx_cause1) & sum(c(idx_cause2,:) == 2,1)==length(idx_cause2));
                 end
                 
                 % take the maximum of posterior (end of each session/day)
@@ -315,7 +334,7 @@ for i_exp = i_expList
             end
             
             if i_exp == 2
-                predict_shock(28:29) = nan;
+                predict_shock(N_trials_train+N_trials_extinction+1:N_trials_train+N_trials_extinction+N_trials_reinstatement) = nan;
             end
             predict_shock_all(i_simu,:,i_exp_condition) = predict_shock;
             predict_shock_all_baseline(i_simu,:,i_exp_condition) = predict_shock_baseline;
@@ -336,7 +355,8 @@ for i_exp = i_expList
     end
     
     %% save simulation results
-    save(['results/' filename '.mat'], 'predict_shock_all', 'predict_shock_all_baseline', 'p_one_cause_pre', 'p_two_causes1_pre', 'p_two_causes2_pre', 'p_one_cause_post', 'p_two_causes1_post', 'p_two_causes2_post', 'cause_assignment', 'p_cause', 'p_cause_lmtest', 'p_cause_reins');
+    save(['results_continuous/' filename '.mat'], 'predict_shock_all', 'predict_shock_all_baseline', 'p_one_cause_post', 'p_two_causes_post', 'cause_assignment');
+    %, 'p_one_cause_pre', 'p_two_causes1_pre', 'p_two_causes2_pre', 'p_one_cause_post', 'p_two_causes1_post', 'p_two_causes2_post', 'cause_assignment', 'p_cause', 'p_cause_lmtest', 'p_cause_reins'
     
 end
 end

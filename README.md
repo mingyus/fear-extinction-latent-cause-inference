@@ -16,35 +16,64 @@ This repository contains data and code that accompany the manuscript entitled "E
 Main model:
 
 ```
-for i=1:2
-	simu_particle_filter(i,'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
-end
+simu_particle_filter([1,2],'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
 ```
 
 Alternative models:
 
 ```
-for i=1:2
-	% Standard CRP prior
-	simu_particle_filter(i,'RL',[0.2,1,0,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
-	% Learning through inference
-	simu_particle_filter(i,'inference',[0.2,1,0.1,0.1,0.5,0.5,0.95,0.05,0.7],1,10000,1);
-	% Full posterior
-	simu_particle_filter(i,'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],0,10000,1);
-	% No perseveration
-	simu_particle_filter(i,'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0],1,10000,1);
-	% No perseveration + low learning rate
-	simu_particle_filter(i,'RL',[0.2,1,0.1,0.1,0.1,0.1,0.1,0.2,0.5,0.05,0],1,10000,1,0);
-end
+% Standard CRP prior
+simu_particle_filter([1,2],'RL',[0.2,1,0,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
+
+% Learning through inference
+simu_particle_filter([1,2],'inference',[0.2,1,0.1,0.1,0.5,0.5,0.95,0.05,0.7],1,10000,1);
+
+% Full posterior
+simu_particle_filter([1,2],'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],0,10000,1);
+
+% No perseveration
+simu_particle_filter([1,2],'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0],1,10000,1);
+
+% No perseveration + low learning rate
+simu_particle_filter([1,2],'RL',[0.2,1,0.1,0.1,0.1,0.1,0.1,0.2,0.5,0.05,0],1,10000,1,0);
+```
+
+Other experiments:
+
+```
+% spaced vs massed extinction
+simu_particle_filter_other_exps('multiple_sessions',[1,2],'RL',[0.05,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
+	
+% occasional reinforcement experiments
+simu_particle_filter_other_exps('occasional_reinforcement',3,'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
+
+% low intensity shock during reinforcement experiment
+simu_particle_filter_other_exps('low_intensity',2,'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7],1,10000,1);
+```
+
+Shock with continuous intensity:
+
+```
+simu_particle_filter_continuous([1,2],'RL',[0.2,1,0.1,0.1,0.2,0.2,0.2,0.4,0.5,0.05,0.7,0.4],1,10000,1);
+```
+
+Simulation with varying parameter values:
+
+```
+newp('simulation');
 ```
 
 **To reproduce figures in the manuscript**
 
 * `plot_cause_probability.m`: Figure 3
 * `plot_freeze_rate('main')`: Figure 4
+* `plot_summary.m`: Figure 5, Supplemenary Figure 2
 * `plot_freeze_rate('alternative')`: Figure 6
-<!-- * `plot_freeze_rate('CNN')`: Supplemenary Figure 1 --> 
-* `plot_summary.m`: Figure 5, Supplemenary Figure 1
+* `plot_multiple_sessions.m`: Figure 7A
+* `plot_low_intensity.m`: Figure 7B
+* `plot_occasional_reinforcement.m`: Figure 7C
+* `plot_continuous.m`: Figure 7D
+* `newp('plot')`: Supplementary Figure 1
 
 **Helper functions**
 
