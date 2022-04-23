@@ -40,7 +40,7 @@ for i_exp = i_expList
     %% Trial information: number of trials, trial indices, and timing information
     
     N_trials_train = 3;
-    N_trials_extinction = 26;
+    N_trials_extinction = 24;
     
     switch i_exp
         case 1 % spontaneous recovery
@@ -89,19 +89,18 @@ for i_exp = i_expList
     end
     
     % standard extinction, deconditioning, reduced intensity
-%     shocks = {
-%         zeros(1,N_trials_extinction),
-%         [-(0:N_trials_extinction/2-1)/(N_trials_extinction/2) + 1, zeros(1,N_trials_extinction/2)],
-%         [exp(-(0:N_trials_extinction/2-1) / (N_trials_extinction/4)), zeros(1,N_trials_extinction/2)]
-%     };
-%     shocks{4} = [shocks{2}(1:N_trials_extinction/2) + shocks{2}(N_trials_extinction/2:-1:1) - shocks{3}(N_trials_extinction/2:-1:1), zeros(1,N_trials_extinction/2)];
-    
     shocks = {
         zeros(1,N_trials_extinction),
-        [-(0:7-1)/7 + 1, zeros(1,13+6)],
-        [-(0:10-1)/10 + 1, zeros(1,10+6)],
-        [-(0:13-1)/13 + 1, zeros(1,7+6)],
+        [-(0:N_trials_extinction/2-1)/(N_trials_extinction/2) + 1, zeros(1,N_trials_extinction/2)],
+        [exp(-(0:N_trials_extinction/2-1) / (N_trials_extinction/5)), zeros(1,N_trials_extinction/2)]
     };
+    shocks{4} = [shocks{2}(1:N_trials_extinction/2) + shocks{2}(N_trials_extinction/2:-1:1) - shocks{3}(N_trials_extinction/2:-1:1), zeros(1,N_trials_extinction/2)];
+    
+    ind_shock = {[1,3,6,10,15],[1,6,10,13,15]};
+    for i_cond = 1:length(ind_shock)
+        shocks{i_cond+4} = zeros(1,N_trials_extinction);
+        shocks{i_cond+4}(ind_shock{i_cond}) = 1;
+    end
     
     N_exp_condition = length(shocks);
     
